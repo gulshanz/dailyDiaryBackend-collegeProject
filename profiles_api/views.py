@@ -8,6 +8,7 @@ from profiles_api import serializers, models
 from rest_framework.response import Response
 from rest_framework import status, viewsets
 
+import textblob as tb
 import text2emotion as te
 
 from rest_framework.views import APIView
@@ -20,6 +21,7 @@ from django.utils.timezone import datetime
 
 
 class UserLoginApiView(ObtainAuthToken):
+
     """Handle creating user authentication tokens"""
     renderer_classes = api_settings.DEFAULT_RENDERER_CLASSES
 
@@ -71,20 +73,24 @@ class CreateNoteForDay(APIView):
                                                 created_on=date)
             serializer = self.serializer_class(data=note)
             note.written_data = data.get('written_data')
-            emotions_data = te.get_emotion(note.written_data)
-            print(emotions_data)
+            emotions_data_tb = tb.TextBlob(note.written_data).sentiment
+            emotions_data_te = te.get_emotion(data.get('written_data'))
             note.save()
-            return Response({'message': 'Updated successfully', 'emotions': emotions_data}, status.HTTP_200_OK)
+            return Response({'message': 'Updated successfully', 'emotions_tb': str(emotions_data_tb),
+                             'emotions_te': emotions_data_te}, status.HTTP_200_OK)
         except Exception:
-            emotions_data = te.get_emotion(data.get('written_data'))
-            print(emotions_data)
+            emotions_data_tb = tb.TextBlob(data.get('written_data')).sentiment
+            print(emotions_data_tb)
+            emotions_data_te=te.get_emotion(data.get('written_data'))
             serializer = self.serializer_class(data={'user_profile': self.request.user.id,
                                                      'written_data': data.get('written_data'),
                                                      'created_on': date,
-                                                     'emotions': str(emotions_data)})
+                                                     'emotions': str(emotions_data_tb)})
             if serializer.is_valid():
                 serializer.save(user_profile=self.request.user)
-                return Response({'message': serializer.data, 'emotions': emotions_data}, status=status.HTTP_201_CREATED)
+                return Response({'message': serializer.data, 'emotions': str(emotions_data_tb)
+                                 ,'emotions_te': emotions_data_te},
+                                status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -99,3 +105,6 @@ class CreateUserProfile(APIView):
             serializer.save()
             return Response({'message': serializer.data}, status.HTTP_201_CREATED)
         return Response({'message': serializer.errors}, status.HTTP_400_BAD_REQUEST)
+
+
+
